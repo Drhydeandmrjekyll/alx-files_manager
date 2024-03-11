@@ -1,14 +1,11 @@
-// utils/redis.js
-
-import redis from 'redis';
+import { createClient } from 'redis';
 
 class RedisClient {
   constructor() {
-    this.client = redis.createClient();
+    this.client = createClient();
 
-    // Display any error in console
-    this.client.on('error', (err) => {
-      console.error(`Redis client error: ${err}`);
+    this.client.on('error', (error) => {
+      console.error('Redis client error:', error);
     });
   }
 
@@ -28,13 +25,13 @@ class RedisClient {
     });
   }
 
-  async set(key, value, durationInSeconds) {
+  async set(key, value, duration) {
     return new Promise((resolve, reject) => {
-      this.client.setex(key, durationInSeconds, value, (error, reply) => {
+      this.client.set(key, value, 'EX', duration, (error) => {
         if (error) {
           reject(error);
         } else {
-          resolve(reply);
+          resolve();
         }
       });
     });
@@ -42,11 +39,23 @@ class RedisClient {
 
   async del(key) {
     return new Promise((resolve, reject) => {
-      this.client.del(key, (error, reply) => {
+      this.client.del(key, (error) => {
         if (error) {
           reject(error);
         } else {
-          resolve(reply);
+          resolve();
+        }
+      });
+    });
+  }
+
+  async nbUsers() {
+    return new Promise((resolve, reject) => {
+      this.client.keys('*', (error, keys) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(keys.length);
         }
       });
     });
