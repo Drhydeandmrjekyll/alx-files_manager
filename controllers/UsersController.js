@@ -1,5 +1,7 @@
 import sha1 from 'sha1';
 import User from '../models/User';
+import uuidv4 from 'uuid/v4'; // Import uuidv4 for generating random tokens
+import redisClient from '../utils/redis'; // Import redisClient
 
 const UsersController = {
   async postNew(req, res) {
@@ -34,6 +36,33 @@ const UsersController = {
       return res.status(500).json({ error: 'Internal Server Error' });
     }
   },
+
+  async getMe(req, res) {
+    try {
+      // Get user id from token
+      const { token } = req.headers;
+
+      // Retrieve user id from Redis using token
+      const userId = await redisClient.get(`auth_${token}`);
+
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      // Find user in database
+      const user = await User.findById(userId);
+
+      if (!user) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+
+      // Respond with user's id and email
+      return res.status(200).json({ id: user._id, email: user.email });
+    } catch (error) {
+      console.error('Error getting user:', error);
+      return res.status(500).json({ error: 'Internal Server Error' });
+    }
+  }
 };
 
 export default UsersController;
