@@ -1,55 +1,149 @@
-import uuidv4 from 'uuid/v4'; // Import uuidv4 for generating random tokens
+// Import necessary modules and utilities
+import { v4 as uuidv4 } from 'uuid';
 import sha1 from 'sha1';
-import redisClient from '../utils/redis'; // Import redisClient
-import User from '../models/User';
+import { ObjectId } from 'mongodb';
+import db from '../utils/db';
+import redisClient from '../utils/redis';
 
-const AuthController = {
-  async getConnect(req, res) {
+// function to return existing user if they exist, returns false it not exists
+async function getUserByEmailAndPwd(email, pwd) {
+  try {
+    // Attempt to find user with given email in database
+    const existingUser = await db.usersCollection.findOne({ email, password: pwd });
+    // for debugging
+    console.log('existingUser', existingUser);
+    console.log('email', email);
+    console.log('pwd', pwd);
+
+    // If a user with given email and hashed password is found
+    if (existingUser) {
+      return existingUser;
+    }
+
+    // If no user is found or password doesn't match, return false
+    return false;
+  } catch (error) {
+    // Log an error message if an error occurs during database operation
+    console.log('Error in compare', error.message);
+
+    // Return false to indicate an error or no user found
+    return false;
+  }
+}
+
+// Define AuthController class
+class AuthController {
+  // Endpoint to sign-in user and generate a new authentication token
+  static async getConnect(req, res) {
+    const authHeader = req.header('Authorization');
+    // for debugging
+    console.log('authHeader', authHeader);
     try {
-      const credentials = req.headers.authorization.split(' ')[1];
-      const [email, password] = Buffer.from(credentials, 'base64').toString('utf-8').split(':');
-
-      // Find user by email and hashed password
-      const hashedPassword = sha1(password);
-      const user = await User.findOne({ email, password: hashedPassword });
-
-      if (!user) {
-        return res.status(401).json({ error: 'Unauthorized' });
+      // Check if Authorization header is present and starts with 'Basic '
+      if (!authHeader || !authHeader.startsWith('Basic ')) {
+        // for debugging
+        console.log('authHeader', authHeader);
+        const errMsg = { error: 'Unauthorized' };
+        return res.status(401).json(errMsg);
       }
 
-      // Generate a random token
+      // split credentials from space to seperate 'Basic' and credentials
+      const credentials = authHeader.split(' ')[1];
+      // decode base64 from header basic auth credentials
+      const decodedCredentials = Buffer.from(credentials, 'base64').toString('utf-8');
+      // split decoded strings to email and password
+      const [email, password] = decodedCredentials.split(':');
+      // debugging
+      console.log('email', email, 'password', password);
+
+      // Check if email or password is missing
+      if (!email || !password) {
+        const errMsg = { error: 'Unauthorized' };
+        return res.status(401).json(errMsg);
+      }
+
+      // Hash password using SHA1
+      const sha1Hashed = sha1(password);
+
+      // userExists is existing User or a boolean(user=exists, false=not exist)
+      const userExists = await getUserByEmailAndPwd(email, sha1Hashed);
+      // debugging
+      console.log('userExists', userExists);
+
+      // If user doesn't exist, return an unauthorized error
+      if (userExists === false) {
+        // for debugging
+        console.log('userExists', userExists);
+        const errMsg = { error: 'Unauthorized' };
+        return res.status(400).json(errMsg);
+      }
+
+      // Generate new authentication token
       const token = uuidv4();
 
-      // Store user ID in Redis with token as key for 24 hours
-      redisClient.set(`auth_${token}`, user._id.toString(), 'EX', 86400);
+      // Create key for Redis storage
+      const key = `auth_${token}`;
 
+      // Set user ID in Redis with generated token for 24 hours
+      const duration = 24 * 60 * 60;
+
+      // make a fresh call to mogondb to retrieve user document
+      const user = await db.usersCollection.findOne({ email });
+      // debugging
+      console.log('user', user);
+
+      // check if user's ObjectId is valid
+      if (user && ObjectId.isValid(user._id)) {
+        // Store user ID in Redis with generated token for 24 hours
+        await redisClient.set(key, user._id.toString(), duration);
+      }
+      // Return token in response
       return res.status(200).json({ token });
     } catch (error) {
-      console.error('Error connecting user:', error);
-      return res.status(500).json({ error: 'Internal Server Error' });
+      // Log an error message if an error occurs during operation
+      console.error('Error when setting header', error.message);
+      // Return a 500 Internal Server Error response
+      return res.status(500).json({ error: error.message });
     }
-  },
+  }
 
-  async getDisconnect(req, res) {
+  // Endpoint to sign-out user based on token
+  static async getDisconnect(req, res) {
+    const { 'x-token': token } = req.headers;
+
     try {
-      const { token } = req.headers;
+      // Check if token is present
+      if (!token) {
+        console.log('No token found', token);
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      // bcb7e6df-a282-4639-8849-2f217b102ee2
 
-      // Retrieve user ID from Redis using token
-      const userId = await redisClient.get(`auth_${token}`);
+      // Create key for Redis storage
+      const key = `auth_${token}`;
+      // Retrieve user ID associated with token from Redis
+      const userId = await redisClient.get(key);
 
+      // log key and userId to console for debugging purpose
+      // console.log(`key = ${key}, userId=${userId}`);
+
+      // If no user ID is found, return an unauthorized error
       if (!userId) {
+        console.log('No user id', userId);
         return res.status(401).json({ error: 'Unauthorized' });
       }
 
-      // Delete token in Redis
-      redisClient.del(`auth_${token}`);
-
-      return res.status(204).send();
+      // Delete token from Redis and return a 204 No Content response
+      await redisClient.del(key);
+      return res.status(204).end();
     } catch (error) {
-      console.error('Error disconnecting user:', error);
+      // Log an error message if an error occurs during operation
+      console.error('Error while trying to disconnect', error.message);
+      // Return a 500 Internal Server Error response
       return res.status(500).json({ error: 'Internal Server Error' });
     }
-  },
-};
+  }
+}
 
+// Export AuthController class
 export default AuthController;

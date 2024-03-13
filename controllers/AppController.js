@@ -1,33 +1,53 @@
-import { getClient } from '../utils/db';
+// Import Redis and MongoDB utilities
+import redis from '../utils/redis';
+import db from '../utils/db';
 
-const AppController = {
-  async getStatus() {
-    const client = getClient();
+// Define AppController class
+class AppController {
+  // Endpoint: GET /status
+  static async getStatus(req, res) {
     try {
-      await client.connect();
-      return { redis: true, db: true };
+      // Check if Redis and MongoDB are alive
+      const isRedisAlive = await redis.isAlive();
+      const isMongoDbAlive = await db.isAlive();
+
+      // Prepare status object
+      const status = {
+        redis: isRedisAlive,
+        db: isMongoDbAlive,
+      };
+
+      // Send status as a JSON response with a status code of 200
+      res.status(200).json(status);
     } catch (error) {
-      return { redis: false, db: false };
-    } finally {
-      await client.close();
+      // Handle errors and send a 500 Internal Server Error response
+      console.error('Error checking status:', error);
+      res.status(500).json({ error: 'Internal Server Error' });
     }
-  },
+  }
 
-  async getStats() {
-    const client = getClient();
+  // Endpoint: GET /stats
+  static async getStats(req, res) {
     try {
-      await client.connect();
-      const db = client.db();
-      const usersCount = await db.collection('users').countDocuments();
-      const filesCount = await db.collection('files').countDocuments();
-      return { users: usersCount, files: filesCount };
+      // Retrieve number of users and files from MongoDB
+      const usersCount = await db.nbUsers();
+      const filesCount = await db.nbFiles();
+
+      // Prepare users and files statistics object
+      const usersAndFiles = {
+        users: usersCount,
+        files: filesCount,
+      };
+
+      // Send statistics as a JSON response with a status code of 200
+      res.status(200).json(usersAndFiles);
     } catch (error) {
+      // Handle errors and send a 500 Internal Server Error response
       console.error('Error getting stats:', error);
-      throw error;
-    } finally {
-      await client.close();
+      res.status(500).json({ error: 'Internal Server Error' });
     }
-  },
-};
+  }
+}
 
+// Export AppController class for use in other modules
 export default AppController;
