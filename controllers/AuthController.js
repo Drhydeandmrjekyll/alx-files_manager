@@ -1,6 +1,6 @@
 import uuidv4 from 'uuid/v4'; // Import uuidv4 for generating random tokens
-import redisClient from '../utils/redis'; // Import redisClient
 import sha1 from 'sha1';
+import redisClient from '../utils/redis'; // Import redisClient
 import User from '../models/User';
 
 const AuthController = {
@@ -49,7 +49,7 @@ const AuthController = {
       console.error('Error disconnecting user:', error);
       return res.status(500).json({ error: 'Internal Server Error' });
     }
-  }
+  },
 };
 
 export default AuthController;

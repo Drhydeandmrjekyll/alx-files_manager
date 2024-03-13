@@ -1,31 +1,24 @@
-import dbClient from './redis';
+import { MongoClient } from 'mongodb';
 
-const waitConnection = () => new Promise((resolve, reject) => {
-  let i = 0;
-  const repeatFct = async () => {
-    await setTimeout(() => {
-      i += 1;
-      if (i >= 10) {
-        reject(new Error('Connection to MongoDB timed out')); // Reject with an error
-      } else if (!dbClient.isAlive()) {
-        repeatFct();
-      } else {
-        resolve();
-      }
-    }, 1000);
-  };
-  repeatFct();
-});
+// MongoDB connection URI
+const uri = 'mongodb://localhost:27017';
 
-(async () => {
-  console.log(dbClient.isAlive());
+// Create a new MongoClient
+const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true });
+
+// Connect to MongoDB
+async function connect() {
   try {
-    await waitConnection();
-    console.log(dbClient.isAlive());
-    console.log(await dbClient.nbUsers());
-    console.log(await dbClient.nbFiles());
-  } catch (error) {
-    console.error(`Error: ${error.message}`);
-    process.exit(1); // Terminate the process with a non-zero exit code
+    await client.connect();
+    console.log('Connected to MongoDB');
+  } catch (err) {
+    console.error('Error connecting to MongoDB:', err);
   }
-})();
+}
+
+// Get MongoDB client
+function getClient() {
+  return client.db(); // Return database object instead of client
+}
+
+export { connect, getClient };

@@ -1,30 +1,31 @@
-import dbClient from './utils/db';
+import { connect, getClient } from './utils/db';
 
 const waitConnection = () => {
     return new Promise((resolve, reject) => {
         let i = 0;
         const repeatFct = async () => {
-            await setTimeout(() => {
+            setTimeout(async () => {
                 i += 1;
                 if (i >= 10) {
-                    reject()
-                }
-                else if(!dbClient.isAlive()) {
-                    repeatFct()
-                }
-                else {
-                    resolve()
+                    reject(new Error('Connection timeout'));
+                } else if (!getClient().isConnected()) {
+                    await repeatFct();
+                } else {
+                    resolve();
                 }
             }, 1000);
         };
         repeatFct();
-    })
+    });
 };
 
 (async () => {
-    console.log(dbClient.isAlive());
+    await connect();
+    console.log('Connected to MongoDB');
     await waitConnection();
+    console.log('Database connection is active');
     console.log(dbClient.isAlive());
-    console.log(await dbClient.nbUsers());
-    console.log(await dbClient.nbFiles());
+    onsole.log(await getClient().nbUsers());
+    console.log(await getClient().nbFiles());
 })();
+

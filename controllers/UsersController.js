@@ -1,7 +1,7 @@
 import sha1 from 'sha1';
-import User from '../models/User';
 import uuidv4 from 'uuid/v4'; // Import uuidv4 for generating random tokens
 import redisClient from '../utils/redis'; // Import redisClient
+import User from '../models/User';
 
 const UsersController = {
   async postNew(req, res) {
@@ -62,7 +62,7 @@ const UsersController = {
       console.error('Error getting user:', error);
       return res.status(500).json({ error: 'Internal Server Error' });
     }
-  }
+  },
 };
 
 export default UsersController;
